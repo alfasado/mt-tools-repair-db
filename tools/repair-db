@@ -1,0 +1,126 @@
+#!/usr/bin/perl
+package MT::Tool::RepairDB;
+use strict;
+use warnings;
+use File::Spec;
+use FindBin;
+use lib map File::Spec->catdir($FindBin::Bin, File::Spec->updir, $_), qw/lib extlib/;
+use base qw( MT::Tool );
+
+sub usage { '--debug 1' }
+
+sub help {
+    return q {
+        Repair database inconsistencies.
+
+        --debug 1
+    };
+}
+
+my ( $debug );
+
+sub options {
+    return (
+        'debug=s'   => \$debug,
+    );
+}
+
+sub main {
+    my $class = shift;
+    my ( $verbose ) = $class->SUPER::main( @_ );
+    my $inconsistencies;
+    my @blog_ids;
+    my $terms;
+    my $blog_terms;
+    my $blog_iter = MT->model( 'blog' )->load_iter();
+    while ( my $blog = $blog_iter->() ) {
+        if (! $blog->website ) {
+            push( @blog_ids, $blog->id );
+        }
+    }
+    $blog_terms->{ id } = \@blog_ids;
+    $terms->{ blog_id } = \@blog_ids;
+    my @blogs = MT->model( 'blog' )->load( $blog_terms );
+    for my $blog ( @blogs ) {
+        $inconsistencies = 1;
+        my $site_path = $blog->site_path;
+        # TODO::Remove Files.
+        if ( $debug ) {
+            print 'Blog has no website(id:' . $blog->id . ")\n";
+        } else {
+            $blog->remove or die $blog->errstr;
+        }
+        if (! $debug ) {
+            my $scope = '%:blog:' . $blog->id;
+            my @plugindata = MT->model( 'plugindata' )->load( { key => { like => $scope } } );
+            for my $data ( @plugindata ) {
+                $data->remove or die $data->errstr;
+            }
+        }
+    }
+    if (! $debug ) {
+        my @models = __models();
+        for my $model( @models ) {
+            if ( my $class = MT->model( $model ) ) {
+                if ( $class->has_column( 'blog_id' ) ) {
+                    my @objects = $class->load( $terms );
+                    for my $object ( @objects ) {
+                        next unless $object;
+                        $object->remove or die $object->errstr;
+                    }
+                }
+            }
+        }
+    }
+    my $placement_iter = MT->model( 'placement' )->load_iter();
+    my @placement_ids;
+    while ( my $placement = $placement_iter->() ) {
+        my $entry = MT->model( 'entry' )->load( $placement->entry_id );
+        my $category = MT->model( 'category' )->load( $placement->category_id );
+        if ( (! $entry ) || (! $category ) ) {
+            push( @placement_ids, $placement->id );
+        }
+    }
+    my @placement = MT->model( 'placement' )->load( { id => \@placement_ids } );
+    for my $place ( @placement ) {
+        $inconsistencies = 1;
+        if ( $debug ) {
+            print 'Placement has no entry or category(id:' . $place->id . ")\n";
+        } else {
+            $place->remove or die $place->errstr;
+        }
+    }
+    my $category_iter = MT->model( 'placement' )->load_iter( { class => [ 'category', 'folder' ],
+                                                               parent => { not => 0 }  } );
+    my @category_ids;
+    while ( my $category = $category_iter->() ) {
+        my $parent = MT->model( 'category' )->load( { parent => $category->parent } );
+        if (! $parent ) {
+            push( @category_ids, $category->id );
+        }
+    }
+    my @categories = MT->model( 'category' )->load( { id => \@category_ids,
+                                                      class => [ 'category', 'folder' ] } );
+    for my $category ( @categories ) {
+        $inconsistencies = 1;
+        if ( $debug ) {
+            print 'Category has no parent(id:' . $category->id . ")\n";
+        } else {
+            $category->remove or die $category->errstr;
+        }
+    }
+    if ( $debug ) {
+        if (! $inconsistencies ) {
+            print "No database inconsistencies.\n";
+        }
+    }
+    1;
+}
+
+sub __models {
+    my @matches; my $model = MT->registry( 'object_types' );
+    for my $m ( keys %$model ) { if ( $m !~ /\Q.\E/ ) { push @matches, $m; } }
+    return @matches;
+}
+
+__PACKAGE__->main() unless caller;
