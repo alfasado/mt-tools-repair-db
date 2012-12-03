@@ -81,13 +81,15 @@ sub main {
             push( @placement_ids, $placement->id );
         }
     }
-    my @placement = MT->model( 'placement' )->load( { id => \@placement_ids } );
-    for my $place ( @placement ) {
-        $inconsistencies = 1;
-        if ( $debug ) {
-            print 'Placement has no entry or category(id:' . $place->id . ")\n";
-        } else {
-            $place->remove or die $place->errstr;
+    if ( @placement_ids ) {
+        my @placement = MT->model( 'placement' )->load( { id => \@placement_ids } );
+        for my $place ( @placement ) {
+            $inconsistencies = 1;
+            if ( $debug ) {
+                print 'Placement has no entry or category(id:' . $place->id . ")\n";
+            } else {
+                $place->remove or die $place->errstr;
+            }
         }
     }
     my $category_iter = MT->model( 'placement' )->load_iter( { class => [ 'category', 'folder' ],
@@ -99,14 +101,35 @@ sub main {
             push( @category_ids, $category->id );
         }
     }
-    my @categories = MT->model( 'category' )->load( { id => \@category_ids,
-                                                      class => [ 'category', 'folder' ] } );
-    for my $category ( @categories ) {
-        $inconsistencies = 1;
-        if ( $debug ) {
-            print 'Category has no parent(id:' . $category->id . ")\n";
-        } else {
-            $category->remove or die $category->errstr;
+    if ( @category_ids ) {
+        my @categories = MT->model( 'category' )->load( { id => \@category_ids,
+                                                          class => [ 'category', 'folder' ] } );
+        for my $category ( @categories ) {
+            $inconsistencies = 1;
+            if ( $debug ) {
+                print 'Category has no parent(id:' . $category->id . ")\n";
+            } else {
+                $category->remove or die $category->errstr;
+            }
+        }
+    }
+    my @template_map_ids;
+    my $template_map_iter = MT->model( 'templatemap' )->load_iter();
+    while ( my $template_map = $template_map_iter->() ) {
+        my $parent = MT->model( 'template' )->load( $template_map->template_id );
+        if (! $parent ) {
+            push( @template_map_ids, $template_map->id );
+        }
+    }
+    if ( @template_map_ids ) {
+        my @templatemaps = MT->model( 'templatemap' )->load( { id => \@template_map_ids } );
+        for my $map ( @templatemaps ) {
+            $inconsistencies = 1;
+            if ( $debug ) {
+                print 'TemplateMap has no parent(id:' . $map->id . ")\n";
+            } else {
+                $map->remove or die $map->errstr;
+            }
         }
     }
     if ( $debug ) {
