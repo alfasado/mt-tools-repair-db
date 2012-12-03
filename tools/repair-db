@@ -58,8 +58,8 @@ sub main {
             }
         }
     }
+    my @models = __models();
     if (! $debug ) {
-        my @models = __models();
         for my $model( @models ) {
             if ( my $class = MT->model( $model ) ) {
                 if ( $class->has_column( 'blog_id' ) ) {
@@ -67,6 +67,30 @@ sub main {
                     for my $object ( @objects ) {
                         next unless $object;
                         $object->remove or die $object->errstr;
+                    }
+                }
+            }
+        }
+    }
+    for my $model( @models ) {
+        if ( my $class = MT->model( $model ) ) {
+            if ( $class->has_column( 'blog_id' ) ) {
+                my $object_iter = $class->load_iter();
+                my @objects;
+                while ( my $object = $object_iter->() ) {
+                    if ( my $blog_id = $object->blog_id ) {
+                        my $blog = MT::Blog->load( $blog_id );
+                        if (! $blog ) {
+                            push( @objects, $object );
+                            if ( $debug ) {
+                                print 'Blog not found(id:' . $blog_id . ")\n";
+                            }
+                        }
+                    }
+                }
+                if (! $debug ) {
+                    for my $obj( @objects ) {
+                        $obj->remove or die $obj->errstr;
                     }
                 }
             }
