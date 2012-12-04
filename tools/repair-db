@@ -38,8 +38,8 @@ sub main {
             push( @blog_ids, $blog->id );
         }
     }
-    $blog_terms->{ id } = \@blog_ids;
-    $terms->{ blog_id } = \@blog_ids;
+    $blog_terms->{ id } = \@blog_ids if @blog_ids;
+    $terms->{ blog_id } = \@blog_ids if @blog_ids;
     my @blogs = MT->model( 'blog' )->load( $blog_terms );
     for my $blog ( @blogs ) {
         $inconsistencies = 1;
@@ -116,7 +116,7 @@ sub main {
             }
         }
     }
-    my $category_iter = MT->model( 'placement' )->load_iter( { class => [ 'category', 'folder' ],
+    my $category_iter = MT->model( 'category' )->load_iter( { class => [ 'category', 'folder' ],
                                                                parent => { not => 0 }  } );
     my @category_ids;
     while ( my $category = $category_iter->() ) {
