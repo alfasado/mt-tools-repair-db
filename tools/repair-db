@@ -28,6 +28,8 @@ sub options {
 sub main {
     my $class = shift;
     my ( $verbose ) = $class->SUPER::main( @_ );
+    require MT::Blog;
+    require MT::Category;
     my $inconsistencies;
     my @blog_ids;
     my $terms;
@@ -37,8 +39,12 @@ sub main {
     while ( my $blog = $blog_iter->() ) {
         next if $blog->class eq 'website';
         if (! $blog->website ) {
-            $inconsistencies_blog = 1;
-            push( @blog_ids, $blog->id );
+            next unless $blog->parent_id;
+            my $website = MT->model( 'website' )->load( $blog->parent_id );
+            if (! $website ) {
+                $inconsistencies_blog = 1;
+                push( @blog_ids, $blog->id );
+            }
         }
     }
     if ( $inconsistencies_blog ) {
@@ -46,19 +52,24 @@ sub main {
         $terms->{ blog_id } = \@blog_ids;
         my @blogs = MT->model( 'blog' )->load( $blog_terms );
         for my $blog ( @blogs ) {
-            $inconsistencies = 1;
-            my $site_path = $blog->site_path;
-            # TODO::Remove Files.
-            if ( $debug ) {
-                print 'Blog has no website(id:' . $blog->id . ")\n";
-            } else {
-                $blog->remove or die $blog->errstr;
-            }
-            if (! $debug ) {
-                my $scope = 'blog:' . $blog->id;
-                my @plugindata = MT->model( 'plugindata' )->load( { key => { like => $scope } } );
-                for my $data ( @plugindata ) {
-                    $data->remove or die $data->errstr;
+            if (! $blog->website ) {
+                my $website = MT->model( 'website' )->load( $blog->parent_id );
+                if (! $website ) {
+                    $inconsistencies = 1;
+                    my $site_path = $blog->site_path;
+                    # TODO::Remove Files.
+                    if ( $debug ) {
+                        print 'Blog has no website(id:' . $blog->id . ")\n";
+                    } else {
+                        $blog->remove or die $blog->errstr;
+                    }
+                    if (! $debug ) {
+                        my $scope = 'blog:' . $blog->id;
+                        my @plugindata = MT->model( 'plugindata' )->load( { key => { like => $scope } } );
+                        for my $data ( @plugindata ) {
+                            $data->remove or die $data->errstr;
+                        }
+                    }
                 }
             }
         }
@@ -72,7 +83,10 @@ sub main {
                         my @objects = $class->load( $terms );
                         for my $object ( @objects ) {
                             next unless $object;
-                            $object->remove or die $object->errstr;
+                            my $obj_blog = MT::Blog->load( $object->blog_id );
+                            if (! $obj_blog ) {
+                                $object->remove or die $object->errstr;
+                            }
                         }
                     }
                 }
@@ -123,24 +137,31 @@ sub main {
             }
         }
     }
-    my $category_iter = MT->model( 'placement' )->load_iter( { class => [ 'category', 'folder' ],
+    my $category_iter = MT->model( 'category' )->load_iter( { class => [ 'category', 'folder' ],
                                                                parent => { not => 0 }  } );
     my @category_ids;
     while ( my $category = $category_iter->() ) {
-        my $parent = MT->model( 'category' )->load( { parent => $category->parent } );
-        if (! $parent ) {
-            push( @category_ids, $category->id );
+        if ( $category->parent ) {
+            my $parent = MT->model( 'category' )->load( { parent => $category->parent } );
+            if (! $parent ) {
+                push( @category_ids, $category->id );
+            }
         }
     }
     if ( @category_ids ) {
         my @categories = MT->model( 'category' )->load( { id => \@category_ids,
                                                           class => [ 'category', 'folder' ] } );
         for my $category ( @categories ) {
-            $inconsistencies = 1;
-            if ( $debug ) {
-                print 'Category has no parent(id:' . $category->id . ")\n";
-            } else {
-                $category->remove or die $category->errstr;
+            if ( $category->parent ) {
+                my $parent = MT::Category->load( { id => $category->parent, class => $category->class } );
+                if (! $parent ) {
+                    $inconsistencies = 1;
+                    if ( $debug ) {
+                        print 'Category(Folder) has no parent(id:' . $category->id . ")\n";
+                    } else {
+                        $category->remove or die $category->errstr;
+                    }
+                }
             }
         }
     }
