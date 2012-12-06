@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use File::Spec;
 use FindBin;
-use lib map File::Spec->catdir($FindBin::Bin, File::Spec->updir, $_), qw/lib extlib/;
+use lib map File::Spec->catdir( $FindBin::Bin, File::Spec->updir, $_ ), qw/lib extlib/;
 use base qw( MT::Tool );
 
 sub usage { '--debug 1' }
@@ -33,40 +33,46 @@ sub main {
     my $terms;
     my $blog_terms;
     my $blog_iter = MT->model( 'blog' )->load_iter();
+    my $inconsistencies_blog;
     while ( my $blog = $blog_iter->() ) {
         if (! $blog->website ) {
+            $inconsistencies_blog = 1;
             push( @blog_ids, $blog->id );
         }
     }
-    $blog_terms->{ id } = \@blog_ids if @blog_ids;
-    $terms->{ blog_id } = \@blog_ids if @blog_ids;
-    my @blogs = MT->model( 'blog' )->load( $blog_terms );
-    for my $blog ( @blogs ) {
-        $inconsistencies = 1;
-        my $site_path = $blog->site_path;
-        # TODO::Remove Files.
-        if ( $debug ) {
-            print 'Blog has no website(id:' . $blog->id . ")\n";
-        } else {
-            $blog->remove or die $blog->errstr;
-        }
-        if (! $debug ) {
-            my $scope = '%:blog:' . $blog->id;
-            my @plugindata = MT->model( 'plugindata' )->load( { key => { like => $scope } } );
-            for my $data ( @plugindata ) {
-                $data->remove or die $data->errstr;
+    if ( $inconsistencies_blog ) {
+        $blog_terms->{ id } = \@blog_ids;
+        $terms->{ blog_id } = \@blog_ids;
+        my @blogs = MT->model( 'blog' )->load( $blog_terms );
+        for my $blog ( @blogs ) {
+            $inconsistencies = 1;
+            my $site_path = $blog->site_path;
+            # TODO::Remove Files.
+            if ( $debug ) {
+                print 'Blog has no website(id:' . $blog->id . ")\n";
+            } else {
+                $blog->remove or die $blog->errstr;
+            }
+            if (! $debug ) {
+                my $scope = '%:blog:' . $blog->id;
+                my @plugindata = MT->model( 'plugindata' )->load( { key => { like => $scope } } );
+                for my $data ( @plugindata ) {
+                    $data->remove or die $data->errstr;
+                }
             }
         }
     }
     my @models = __models();
-    if (! $debug ) {
-        for my $model( @models ) {
-            if ( my $class = MT->model( $model ) ) {
-                if ( $class->has_column( 'blog_id' ) ) {
-                    my @objects = $class->load( $terms );
-                    for my $object ( @objects ) {
-                        next unless $object;
-                        $object->remove or die $object->errstr;
+    if ( $inconsistencies_blog ) {
+        if (! $debug ) {
+            for my $model( @models ) {
+                if ( my $class = MT->model( $model ) ) {
+                    if ( $class->has_column( 'blog_id' ) ) {
+                        my @objects = $class->load( $terms );
+                        for my $object ( @objects ) {
+                            next unless $object;
+                            $object->remove or die $object->errstr;
+                        }
                     }
                 }
             }
@@ -116,7 +122,7 @@ sub main {
             }
         }
     }
-    my $category_iter = MT->model( 'category' )->load_iter( { class => [ 'category', 'folder' ],
+    my $category_iter = MT->model( 'placement' )->load_iter( { class => [ 'category', 'folder' ],
                                                                parent => { not => 0 }  } );
     my @category_ids;
     while ( my $category = $category_iter->() ) {
