@@ -76,16 +76,18 @@ sub main {
     }
     my @models = __models();
     if ( $inconsistencies_blog ) {
-        if (! $debug ) {
-            for my $model( @models ) {
-                if ( my $class = MT->model( $model ) ) {
-                    if ( $class->has_column( 'blog_id' ) ) {
-                        my @objects = $class->load( $terms );
-                        for my $object ( @objects ) {
-                            next unless $object;
-                            my $obj_blog = MT::Blog->load( $object->blog_id );
-                            if (! $obj_blog ) {
-                                $inconsistencies = 1;
+        for my $model( @models ) {
+            if ( my $class = MT->model( $model ) ) {
+                if ( $class->has_column( 'blog_id' ) ) {
+                    my @objects = $class->load( $terms );
+                    for my $object ( @objects ) {
+                        next unless $object;
+                        my $obj_blog = MT::Blog->load( $object->blog_id );
+                        if (! $obj_blog ) {
+                            $inconsistencies = 1;
+                            if ( $debug ) {
+                                print 'Blog not found(id:' . $object->blog_id . ")\n";
+                            } else {
                                 $object->remove or die $object->errstr;
                             }
                         }
