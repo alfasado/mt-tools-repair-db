@@ -86,11 +86,7 @@ sub main {
                             my $obj_blog = MT::Blog->load( $object->blog_id );
                             if (! $obj_blog ) {
                                 $inconsistencies = 1;
-                                if ( $debug ) {
-                                    print 'Blog not found(id:' . $object->blog_id . ")\n";
-                                } else {
-                                    $object->remove or die $object->errstr;
-                                }
+                                $object->remove or die $object->errstr;
                             }
                         }
                     }
