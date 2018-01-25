@@ -188,6 +188,30 @@ sub main {
             }
         }
     }
+    my @fileinfo_ids;
+    my $fileinfo_iter = MT->model( 'fileinfo' )->load_iter( { entry_id => { not_null => 1 } } );
+    while ( my $fileinfo = $fileinfo_iter->() ) {
+        my $entry = MT->model( 'entry' )->load( { id => $fileinfo->entry_id,
+                                                  status => { not => 2 },
+                                                  class => '*' } );
+        if ( $entry ) {
+            push( @fileinfo_ids, $fileinfo->id );
+        }
+    }
+    if ( @fileinfo_ids ) {
+        my @fileinfos = MT->model( 'fileinfo' )->load( { id => \@fileinfo_ids } );
+        for my $fileinfo ( @fileinfos ) {
+            if ( $fileinfo->entry_id < 0 ) {
+                next;
+            }
+            $inconsistencies = 1;
+            if ( $debug ) {
+                print 'Fileinfo has entry, entry is not published (id:' . $fileinfo->id . ")\n";
+            } else {
+                $fileinfo->remove or die $fileinfo->errstr;
+            }
+        }
+    }
     if ( $debug ) {
         if (! $inconsistencies ) {
             print "No database inconsistencies.\n";
