@@ -165,6 +165,13 @@ sub main {
                     } else {
                         $category->remove or die $category->errstr;
                     }
+                } elsif ( $category->blog_id != $parent->blog_id ) {
+                    $inconsistencies = 1;
+                    if ( $debug ) {
+                        print 'Category/Folder(blog_id:' . $category->blog_id . ") has parent at another Blog(blog_id:" . $parent->blog_id . ")\n";
+                    } else {
+                        $category->remove or die $category->errstr;
+                    }
                 }
             }
         }
